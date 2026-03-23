@@ -21,7 +21,7 @@ fi
 
 # Build the images
 echo "Building the images..."
-source ./build.sh
+source ./xbuild.sh
 
 # Get the value of deployable-service from the .config file
 SERVICES_TO_DEPLOY=$(jq -r '.["deployable-service"]' .config)
@@ -35,7 +35,7 @@ fi
 # Push the images to the registry
 echo "Pushing the images to the registry..."
 echo "services to deploy: $SERVICES_TO_DEPLOY" 
-docker-compose -f docker-compose.yml push $SERVICES_TO_DEPLOY
+docker compose -f docker-compose.yml push $SERVICES_TO_DEPLOY
 
 echo "Images being pushed:"
 
@@ -54,7 +54,7 @@ echo "Images being pushed:"
 for service in $SERVICES_TO_DEPLOY; do
   #IMG_NAME=$(docker-compose -f docker-compose.yml config | awk -v service_name="$service" '/^    image:.*'"$service_name"'$/ {print $2}')
   #IMG_NAME=$(yq ".services[\"${service}\"].image" docker-compose.yml)
-  IMG_NAME=$(docker-compose -f docker-compose.yml config | yq -r ".services[\"${service}\"].image")
+  IMG_NAME=$(docker compose -f docker-compose.yml config | yq -r ".services[\"${service}\"].image")
   if [[ -z "$IMG_NAME" ]]; then
     echo "No image found for $service. Skipping..."
     continue
@@ -62,7 +62,7 @@ for service in $SERVICES_TO_DEPLOY; do
   echo "Image being pushed for $service: $IMG_NAME"
   if [[ "$IMG_NAME" != *WIP ]]; then
     echo "	Tagging $IMG_NAME with the 'latest' tag and pushing..."
-    LATEST_IMAGE_TAG="${IMG_NAME%:*}:latest"
+    LATEST_IMAGE_TAG="${IMG_NAME/${COMMIT_HASH}/latest}"
     echo "	image becomes: $LATEST_IMAGE_TAG"
     docker tag $IMG_NAME $LATEST_IMAGE_TAG
     docker push $LATEST_IMAGE_TAG

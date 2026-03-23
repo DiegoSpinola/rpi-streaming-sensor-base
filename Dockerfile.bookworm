@@ -1,0 +1,54 @@
+FROM registry.hackeneering.com/hackeneering/rpi-firmware-base:bookworm-arm64-latest
+
+ARG COMMIT_HASH=unknown
+LABEL org.opencontainers.image.revision="${COMMIT_HASH}"
+LABEL org.opencontainers.image.description="Raspberry Pi streaming sensor base image"
+
+# GStreamer runtime + plugins + RTSP + libcamera integration
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        gstreamer1.0-tools \
+        gstreamer1.0-plugins-base \
+        gstreamer1.0-plugins-good \
+        gstreamer1.0-plugins-bad \
+        gstreamer1.0-libav \
+        gstreamer1.0-rtsp \
+        gstreamer1.0-libcamera \
+        libgstreamer1.0-0 \
+        libgstreamer-plugins-base1.0-0 \
+        libgstreamer-plugins-bad1.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# libcamera runtime + V4L2 utilities
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libcamera0.5 \
+        libcamera-tools \
+        libcamera-v4l2 \
+        v4l-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python 3 + OpenCV + numpy
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 \
+        python3-numpy \
+        python3-opencv \
+    && rm -rf /var/lib/apt/lists/*
+
+# Serial/USB tools (for LiDARs and serial sensors)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        picocom \
+        setserial \
+    && rm -rf /var/lib/apt/lists/*
+
+# MediaMTX RTSP server (statically-linked Go binary)
+ARG MEDIAMTX_VERSION=v1.16.3
+RUN apt-get update && apt-get install -y --no-install-recommends wget \
+    && wget -qO- "https://github.com/bluenviron/mediamtx/releases/download/${MEDIAMTX_VERSION}/mediamtx_${MEDIAMTX_VERSION}_linux_arm64v8.tar.gz" \
+        | tar xz -C /usr/local/bin mediamtx \
+    && chmod +x /usr/local/bin/mediamtx \
+    && apt-get purge -y wget \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# Self-test script
+COPY self-test.sh /usr/local/bin/self-test
+RUN chmod +x /usr/local/bin/self-test
