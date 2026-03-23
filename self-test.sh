@@ -13,11 +13,10 @@ fail() { echo "  [FAIL] $1"; ((FAIL++)); }
 echo "=== Streaming Sensor Base — Self Test ==="
 echo ""
 
-# Run firmware-base self-test first
-echo "--- Firmware Base (inherited) ---"
-if command -v self-test &>/dev/null && [ "$(readlink -f $(which self-test))" != "$(readlink -f $0)" ]; then
-    # firmware-base self-test is overwritten by ours, skip
-    true
+# Run firmware-base self-test first (renamed during image build)
+if command -v self-test-firmware &>/dev/null; then
+    self-test-firmware
+    echo ""
 fi
 
 echo "--- GStreamer ---"
@@ -91,14 +90,14 @@ else
     fail "Python3 not found"
 fi
 
-if python3 -c "import numpy; print(numpy.__version__)" 2>/dev/null; then
-    ok "numpy available"
+if NPVER=$(python3 -c "import numpy; print(numpy.__version__)" 2>/dev/null); then
+    ok "numpy: $NPVER"
 else
     fail "numpy not importable"
 fi
 
-if python3 -c "import cv2; print(cv2.__version__)" 2>/dev/null; then
-    ok "OpenCV available"
+if CVVER=$(python3 -c "import cv2; print(cv2.__version__)" 2>/dev/null); then
+    ok "OpenCV: $CVVER"
 else
     fail "OpenCV not importable"
 fi

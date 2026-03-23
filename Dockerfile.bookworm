@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gstreamer1.0-plugins-base \
         gstreamer1.0-plugins-good \
         gstreamer1.0-plugins-bad \
+        gstreamer1.0-plugins-ugly \
         gstreamer1.0-libav \
         gstreamer1.0-rtsp \
         gstreamer1.0-libcamera \
@@ -39,12 +40,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         setserial \
     && rm -rf /var/lib/apt/lists/*
 
-# MediaMTX RTSP server (statically-linked Go binary)
+# MediaMTX RTSP server (statically-linked Go binary, checksum verified)
 ARG MEDIAMTX_VERSION=v1.16.3
+ARG MEDIAMTX_SHA256=e584c298af70f72753ebfbde20fb3565948724ce0a9817045096ba828e7f6a56
 RUN curl -fsSL "https://github.com/bluenviron/mediamtx/releases/download/${MEDIAMTX_VERSION}/mediamtx_${MEDIAMTX_VERSION}_linux_arm64.tar.gz" \
-        | tar xz -C /usr/local/bin mediamtx \
+        -o /tmp/mediamtx.tar.gz \
+    && echo "${MEDIAMTX_SHA256}  /tmp/mediamtx.tar.gz" | sha256sum -c - \
+    && tar xz -C /usr/local/bin mediamtx < /tmp/mediamtx.tar.gz \
+    && rm /tmp/mediamtx.tar.gz \
     && chmod +x /usr/local/bin/mediamtx
 
-# Self-test script
+# Preserve firmware-base self-test, then install ours
+RUN mv /usr/local/bin/self-test /usr/local/bin/self-test-firmware 2>/dev/null || true
 COPY self-test.sh /usr/local/bin/self-test
 RUN chmod +x /usr/local/bin/self-test
