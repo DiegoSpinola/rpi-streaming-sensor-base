@@ -4,7 +4,15 @@ ARG COMMIT_HASH=unknown
 LABEL org.opencontainers.image.revision="${COMMIT_HASH}"
 LABEL org.opencontainers.image.description="Raspberry Pi streaming sensor base image"
 
-# GStreamer runtime + plugins + RTSP + libcamera integration
+# All apt-installed runtime dependencies in one pass.
+#
+# IMPORTANT: this is the *only* apt-get install in the file. Anything new
+# that needs apt must be added here, BEFORE the libcamera downgrade step
+# below — which leaves the system in a state apt considers "broken" (the
+# downgraded libcamera0.5 0.5.0 fails to satisfy gstreamer1.0-libcamera's
+# and libcamera-v4l2's `Depends: libcamera0.5 (>= 0.5.2+rpt...)`). Runtime
+# ABI compatibility holds, but `apt-get install` refuses to proceed once
+# the system is in that state.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         gstreamer1.0-tools \
         gstreamer1.0-plugins-base \
@@ -17,28 +25,42 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgstreamer1.0-0 \
         libgstreamer-plugins-base1.0-0 \
         libgstreamer-plugins-bad1.0-0 \
-    && rm -rf /var/lib/apt/lists/*
-
-# libcamera runtime + V4L2 utilities
-RUN apt-get update && apt-get install -y --no-install-recommends \
         libcamera0.5 \
+        libcamera-ipa \
         libcamera-tools \
         libcamera-v4l2 \
         v4l-utils \
-    && rm -rf /var/lib/apt/lists/*
-
-# Python 3 + OpenCV + numpy
-RUN apt-get update && apt-get install -y --no-install-recommends \
         python3 \
         python3-numpy \
         python3-opencv \
-    && rm -rf /var/lib/apt/lists/*
-
-# Serial/USB tools (for LiDARs and serial sensors)
-RUN apt-get update && apt-get install -y --no-install-recommends \
         picocom \
         setserial \
     && rm -rf /var/lib/apt/lists/*
+
+# libcamera pinning — 0.5.0+rpt20250707-5 for arducam-pivariety driver compat (#2).
+#
+# Upstream archive.raspberrypi.com only ships the latest 0.5.2+rpt2025...,
+# which added mandatory V4L2 controls the (also pinned) arducam-pivariety
+# kernel module on Arducam ToF kits doesn't expose — breaking libcamerasrc
+# on the kits even though native rpicam-hello works on the host. We
+# downgrade the three libcamera packages to the version known to work,
+# then mark them held + add an apt preferences pin so any downstream
+# `apt-get install` in sensor images can't accidentally upgrade them back.
+#
+# This must be the LAST apt/dpkg operation in the file — see comment
+# above the apt block.
+COPY debs/libcamera0.5_0.5.0+rpt20250707-5_arm64.deb     /tmp/libcamera-debs/
+COPY debs/libcamera-ipa_0.5.0+rpt20250707-5_arm64.deb    /tmp/libcamera-debs/
+COPY debs/libcamera-tools_0.5.0+rpt20250429-1_arm64.deb  /tmp/libcamera-debs/
+RUN dpkg -i --force-downgrade --force-depends \
+        /tmp/libcamera-debs/libcamera0.5_0.5.0+rpt20250707-5_arm64.deb \
+        /tmp/libcamera-debs/libcamera-ipa_0.5.0+rpt20250707-5_arm64.deb \
+        /tmp/libcamera-debs/libcamera-tools_0.5.0+rpt20250429-1_arm64.deb \
+    && rm -rf /tmp/libcamera-debs \
+    && ldconfig \
+    && printf 'Package: libcamera0.5 libcamera-ipa libcamera-tools libcamera-v4l2\nPin: version *\nPin-Priority: 1001\n' \
+        > /etc/apt/preferences.d/libcamera-hold \
+    && apt-mark hold libcamera0.5 libcamera-ipa libcamera-tools libcamera-v4l2
 
 # MediaMTX RTSP server (statically-linked Go binary, checksum verified)
 ARG MEDIAMTX_VERSION=v1.16.3
