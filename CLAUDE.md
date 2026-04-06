@@ -15,7 +15,7 @@ rpi-firmware-base          ← udev, i2c, GPIO, pinctrl
 | Category | Packages |
 |----------|----------|
 | GStreamer | tools, plugins-base/good/bad, libav, rtsp, libcamera |
-| libcamera | runtime, tools, V4L2 bridge |
+| libcamera | runtime, tools, V4L2 bridge — **pinned to 0.5.0+rpt20250707-5** for Arducam pivariety driver compatibility (see #2; vendored in `debs/`) |
 | V4L2 | v4l-utils (USB cameras) |
 | Encoding | openh264 (via GStreamer) |
 | RTSP | MediaMTX v1.16.3 (static binary) |
@@ -39,6 +39,7 @@ rpi-streaming-sensor-base/
 ├── self-test.sh                  # Component verification script
 ├── docker-compose.yml            # Build orchestration
 ├── docker-compose.selftest.yml   # Portainer test stack
+├── debs/                         # Pinned .debs for libcamera (see "libcamera pinning")
 ├── .config                       # Alloy config
 ├── alloy.sh                      # Alloy environment launcher
 ├── build.sh / xbuild.sh          # Build scripts (native / cross-compile)
@@ -47,6 +48,17 @@ rpi-streaming-sensor-base/
 ├── CLAUDE.md                     # This file
 └── README.md
 ```
+
+## libcamera pinning (issue #2)
+
+`libcamera0.5`, `libcamera-ipa`, and `libcamera-tools` are deliberately pinned to **`0.5.0+rpt20250707-5`** (from a working Arducam ToF devkit Pi). The mechanism:
+
+1. `Dockerfile.bookworm` apt-installs the upstream `archive.raspberrypi.com` versions first (so all dependencies resolve), then `dpkg -i --force-downgrade` the three pinned debs from `debs/` on top.
+2. `/etc/apt/preferences.d/libcamera-hold` + `apt-mark hold` prevent any downstream sensor image's `apt-get install` from accidentally upgrading them back.
+
+**Why:** upstream `archive.raspberrypi.com` only ships the latest `libcamera0.5` (currently `0.5.2+rpt20250903-1~bpo12+1`), which added mandatory V4L2 controls the (also pinned) arducam-pivariety kernel module on the devkit Pis doesn't expose. The result is `libcamerasrc` failing with `'arducam-pivariety 10-000c': Mandatory V4L2 control 0x009e0903 not available` even though native `rpicam-hello` works on the host. Vendoring the older debs is the smallest viable workaround until either the Arducam kernel module catches up or upstream libcamera reverts the strictness.
+
+The vendored debs were repacked from a kit Pi via `dpkg-repack libcamera0.5 libcamera-ipa libcamera-tools` and live in `debs/`. Total size ~1.2MB.
 
 ## Build & Deploy
 
